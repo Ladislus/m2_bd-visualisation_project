@@ -1,0 +1,28 @@
+/home/ladislus/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/213.7172.20/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/ladislus/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/213.7172.20/bin/ninja/linux/ninja -G Ninja /home/ladislus/Git/m2_bd-visualisation_project
+CMake Deprecation Warning at CMakeLists.txt:1 (CMAKE_MINIMUM_REQUIRED):
+  Compatibility with CMake < 2.8.12 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+-- Found MPI: TRUE (found version "3.1") found components: C 
+CMake Warning at CMakeLists.txt:19 (MESSAGE):
+  System detected:Linux
+
+
+CMake Warning at CMakeLists.txt:20 (MESSAGE):
+  Path to sn_resamp:/home/ladislus/Git/m2_bd-visualisation_project/data
+
+
+CMake Deprecation Warning at /usr/local/lib/cmake/vtk-9.1/vtk-use-file-deprecated.cmake:1 (message):
+  The `VTK_USE_FILE` is no longer used starting with 8.90.
+Call Stack (most recent call first):
+  CMakeLists.txt:28 (INCLUDE)
+
+
+-- Found MPI: TRUE (found version "3.1")  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug
