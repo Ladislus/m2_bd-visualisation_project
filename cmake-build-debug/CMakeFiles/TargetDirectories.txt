@@ -1,6 +1,0 @@
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/VTK_Project_Ladislas_WALCAK.dir
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/prun1.dir
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/prun2.dir
-/home/ladislus/Git/m2_bd-visualisation_project/cmake-build-debug/CMakeFiles/prun4.dir
