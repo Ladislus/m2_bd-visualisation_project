@@ -22,25 +22,26 @@
 #include <vtkTransformFilter.h>
 #include <vtkPNGWriter.h>
 #include <vtkUnsignedShortArray.h>
+#include <mpi.h>
 
 #include "config.h"
 
-using Time = std::chrono::time_point <std::chrono::system_clock>;
+using Time = std::chrono::time_point<std::chrono::system_clock>;
 #define NOW std::chrono::system_clock::now()
 
 #define BIG
 
-#define FICHIER MY_MESHES_PATH "/Mystere1_512_512_134_SHORT.raw"
+#define FICHIER MY_MESHES_PATH "/Mystere4_512_512_322_SHORT.raw"
 
 int gridSize = 512;
 int YgridSize = 512;
-int ZgridSize = 134;
+int ZgridSize = 322;
 
 //#define CHAR
 #define SHORT
 
-int startexploreval = 40000;
-int endexploreval = 50000;
+int startexploreval = 54000;
+int endexploreval = 58000;
 
 const char *location = FICHIER;
 
@@ -50,14 +51,19 @@ int passNum = 0;
 
 const char *prefix = "";
 
+int pid = -1, nprocs = -1;
+
 // Function prototypes
 vtkRectilinearGrid *ReadGrid(int zStart, int zEnd);
-
 void WriteImage(const char *name, const float *rgba, int width, int height);
+vtkRectilinearGrid* ParallelReadGrid();
+void CompositeImage(const float *rgba_in, float *zbuffer, float *rgba_out, int image_width, int image_height);
 
-bool ComposeImageZbuffer(float *rgba_out, float *zbuffer, int image_width, int image_height);
+int main(int argc, char *argv[]) {
 
-int main() {
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
 	Time startTime = NOW;
 
@@ -74,17 +80,12 @@ int main() {
 	double bounds[6] = {0.00001, 1 - 0.00001, 0.00001, 1 - 0.00001, 0.00001, 1 - 0.00001};
 	ren->ResetCamera(bounds);
 
-	//bool once = true;
 	vtkRenderWindow *renwin = vtkRenderWindow::New();
 	renwin->SetOffScreenRendering(true);
 	renwin->SetSize(winSize, winSize);
 	renwin->AddRenderer(ren);
 
-	int zStart = 0;
-	int zEnd = ZgridSize;
-
-	vtkRectilinearGrid *reader;
-	//vtkRectilinearGrid *reader = ReadGrid(zStart, zEnd);
+	vtkRectilinearGrid *reader = ParallelReadGrid();
 
 	vtkContourFilter *cf = vtkContourFilter::New();
 	cf->SetNumberOfContours(1);
@@ -121,73 +122,22 @@ int main() {
 	cam->SetFocalPoint(0.5, 0.5, 0.5);
 	cam->SetPosition(-0., .0, 3.);
 	cam->SetViewUp(0., -1.0, 0.0);
-	cam->Azimuth(60);
-	transform->RotateY(20);
-	transform->RotateZ(30);
 	//bounds = ren->ComputeVisiblePropBounds();
 
-	float *rgba = nullptr;
-	auto *auxrgba = new float[4 * winSize * winSize];
-	auto *auxzbuffer = new float[4 * winSize * winSize];
+	float *rgba, *zbuffer;
 
-	for (int i = 0; i < winSize * winSize; i++) {
-		auxzbuffer[i] = 1.0;
-		auxrgba[i * 4] = 0;
-		auxrgba[i * 4 + 1] = 0;
-		auxrgba[i * 4 + 2] = 0;
-		auxrgba[i * 4 + 3] = 0;
-	}
+	renwin->Render();
+	rgba = renwin->GetRGBAPixelData(0, 0, (winSize - 1), (winSize - 1), 1);
+	zbuffer = renwin->GetZbufferData(0, 0, (winSize - 1), (winSize - 1));
 
-	const int rst = ZgridSize % numPasses;
-	const int step = ZgridSize / numPasses;
-	for (passNum = 0; passNum < numPasses; passNum++) {
-		zStart = passNum * step + (passNum < rst ? passNum : rst);
-		zEnd = (passNum + 1) * step + ((passNum + 1) < rst ? passNum + 1 : rst);
+	auto *new_rgba = new float[4 * winSize * winSize];
 
-		vtkRectilinearGrid *rg = ReadGrid(zStart, zEnd);
+	CompositeImage(rgba, zbuffer, new_rgba, winSize, winSize);
+	if (pid == 0) WriteImage("final.png", new_rgba, winSize, winSize);
 
-		cf->SetInputData(rg);
-		rg->Delete();
-
-		// Force an update and set the parallel rank as the active scalars.
-		cf->Update();
-		cf->GetOutput()->GetPointData()->SetActiveScalars("pass_num");
-
-		renwin->Render();
-
-		rgba = renwin->GetRGBAPixelData(0, 0, winSize - 1, winSize - 1, 1);
-		float *zbuffer = renwin->GetZbufferData(0, 0, winSize - 1, winSize - 1);
-
-		for (int i = 0; i < winSize * winSize; i++) {
-			if (auxzbuffer[i] > zbuffer[i]) {
-				auxzbuffer[i] = zbuffer[i];
-				auxrgba[i * 4] = rgba[i * 4];
-				auxrgba[i * 4 + 1] = rgba[i * 4 + 1];
-				auxrgba[i * 4 + 2] = rgba[i * 4 + 2];
-				auxrgba[i * 4 + 3] = rgba[i * 4 + 3];
-			}
-		}
-
-		char name[128];
-		sprintf(name, "image%d.png", passNum);
-		WriteImage(name, rgba, winSize, winSize);
-
-		//auto *new_rgba = new float[4 * winSize * winSize];
-		//bool didComposite = ComposeImageZbuffer(new_rgba, zbuffer, winSize, winSize);
-		//
-		//char namez[128];
-		//sprintf(namez, "imageZ%d.png", passNum);
-		//WriteImage(namez, new_rgba, winSize, winSize);
-
-
-		free(rgba);
-		free(zbuffer);
-		//free(new_rgba);
-	}
-
-	WriteImage("final.png", auxrgba, winSize, winSize);
-	free(auxrgba);
-	free(auxzbuffer);
+	free(rgba);
+	free(zbuffer);
+	free(new_rgba);
 
 	//reader = ReadGrid(0, ZgridSize);
 	//cf->SetInputData(reader);
@@ -211,6 +161,8 @@ int main() {
 	actor->Delete();
 	ren->Delete();
 	renwin->Delete();
+
+	MPI_Finalize();
 }
 
 vtkRectilinearGrid *ReadGrid(int zStart, int zEnd) {
@@ -369,29 +321,41 @@ void WriteImage(const char *name, const float *rgba, int width, int height) {
 	writer->Delete();
 }
 
-bool ComposeImageZbuffer(float *rgba_out, float *zbuffer, int image_width, int image_height) {
-	int npixels = image_width * image_height;
+vtkRectilinearGrid* ParallelReadGrid() {
+	int zCount = pid < ZgridSize % nprocs
+				 ? (ZgridSize / nprocs) + 1
+				 : ZgridSize / nprocs;
+	int zStart = pid < ZgridSize % nprocs
+				 ? ((ZgridSize / nprocs) + 1) * pid
+				 : ((ZgridSize / nprocs) + 1) * (ZgridSize % nprocs) + (ZgridSize / nprocs) * (pid - (ZgridSize % nprocs));
+	int zEnd = zStart + zCount;
 
-	float min = 1;
-	float max = 0;
-	for (int i = 0; i < npixels; i++) {
-		if (zbuffer[i] < min) min = zbuffer[i];
-		if (zbuffer[i] > max) max = zbuffer[i];
+	if (zEnd == ZgridSize) --zEnd;
 
-	}
-	//std::cout << "min:" << min;
-	//std::cout << "max:" << max << "  ";
-
-	float coef = 1.f / ((max - min));
-
-	//std::cout << "coef:" << coef << "  ";
-
-	for (int i = 0; i < npixels; i++) {
-		rgba_out[i * 4] = (zbuffer[i] == 1.0 ? 0 : 1 - coef * (zbuffer[i] - min));
-		rgba_out[i * 4 + 1] = (zbuffer[i] == 1.0 ? 0 : 1 - coef * (zbuffer[i] - min));
-		rgba_out[i * 4 + 2] = (zbuffer[i] == 1.0 ? 0 : 1 - coef * (zbuffer[i] - min));
-		rgba_out[i * 4 + 3] = 0.0;
-	}
-	return false;
+	return ReadGrid(zStart, zEnd);
 }
 
+void CompositeImage(const float *rgba_in, float *zbuffer, float *rgba_out, int image_width, int image_height) {
+	int npixels = image_width * image_height;
+
+	auto *zbuffer_min = new float[npixels];
+	MPI_Allreduce(
+			zbuffer, zbuffer_min,
+			npixels, MPI_FLOAT, MPI_MIN,
+			MPI_COMM_WORLD
+	);
+
+	auto *rgba_tmp = new float[4 * npixels];
+	for (int i = 0; i < npixels; ++i) {
+		if (zbuffer[i] <= zbuffer_min[i]) {
+			rgba_tmp[i * 4] = rgba_in[i * 4];
+			rgba_tmp[i * 4 + 1] = rgba_in[i * 4 + 1];
+			rgba_tmp[i * 4 + 2] = rgba_in[i * 4 + 2];
+			rgba_tmp[i * 4 + 3] = rgba_in[i * 4 + 3];
+		}
+	}
+	MPI_Reduce(rgba_tmp, rgba_out, 4 * npixels, MPI_FLOAT, MPI_MAX, 0, MPI_COMM_WORLD);
+
+	delete[] zbuffer_min;
+	delete[] rgba_tmp;
+}
